@@ -1,0 +1,58 @@
+# Every setting can be overridden by an environment variable, so the same
+# image runs locally, in docker compose and on any cloud platform.
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:1000}
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:10000}
+
+spring:
+  application:
+    name: seat-reservation
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/seatbooking}
+    username: ${DB_USER:seatbooking}
+    password: ${DB_PASSWORD:seatbooking}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:3000}
+      # Nothing waits forever: a lock wait or a slow statement fails fast (mapped to 429).
+      connection-init-sql: SET lock_timeout = '${DB_LOCK_TIMEOUT:5s}'; SET statement_timeout = '${DB_STATEMENT_TIMEOUT:10s}'
+  flyway:
+    enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+    deserialization:
+      # Money is integer paise: reject 250.5 instead of silently truncating it.
+      accept-float-as-int: false
+    mapper:
+      # Reject "25000" (string) where a number is expected.
+      allow-coercion-of-scalars: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+logging:
+  structured:
+    format:
+      # JSON log lines (one per line) with MDC fields such as request_id and user_id.
+      console: ${LOG_FORMAT:logstash}
+
+app:
+  jwt:
+    # Must be at least 32 bytes. Override JWT_SECRET in every real deployment.
+    secret: ${JWT_SECRET:local-dev-secret-change-me-0123456789abcdef}
+    ttl-seconds: ${JWT_TTL_SECONDS:3600}
+  bcrypt:
+    strength: ${BCRYPT_STRENGTH:10}
+  reserve:
+    # Max reserve/cancel requests working inside the DB at once (~ DB pool size).
+    max-inflight: ${RESERVE_MAX_INFLIGHT:20}
+    # How long a request may wait for a slot before getting 429.
+    queue-timeout-ms: ${RESERVE_QUEUE_TIMEOUT_MS:2000}
+    # How long a seat stays in the in-memory "already taken" set (0 disables it).
+    taken-cache-ttl-ms: ${TAKEN_CACHE_TTL_MS:2000}

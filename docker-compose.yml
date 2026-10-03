@@ -1,0 +1,33 @@
+# Runs the service and PostgreSQL exactly as deployed:  docker compose up --build
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: seatbooking
+      POSTGRES_USER: seatbooking
+      POSTGRES_PASSWORD: seatbooking
+    ports:
+      - "5433:5432"   # 5433 on the host so it does not clash with a local Postgres on 5432
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatbooking -d seatbooking"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/seatbooking
+      DB_USER: seatbooking
+      DB_PASSWORD: seatbooking
+      JWT_SECRET: compose-dev-secret-change-me-0123456789abcdef
+    ports:
+      - "8080:8080"
+
+volumes:
+  db-data:

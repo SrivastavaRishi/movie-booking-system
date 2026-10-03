@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/seatbooking_test}
+    username: ${TEST_DB_USER:seatbooking}
+    password: ${TEST_DB_PASSWORD:seatbooking}
+
+logging:
+  level:
+    access: WARN
+    com.rishi.seatreservation: WARN
+
+app:
+  bcrypt:
+    strength: 4          # fast hashing so tests can register hundreds of users
+  reserve:
+    queue-timeout-ms: 60000   # tests assert exact 201/409 counts, so never shed load with 429

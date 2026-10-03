@@ -64,6 +64,7 @@ One row per seat per show (2 shows × 100 seats = 200 rows).
 |------------------|-------------|------------------------------|----------------------------------------------------------|-----------------------------------------|
 | `show_id`        | UUID        | PK (part 1), FK → `shows.id` | NOT NULL                                                 |                                         |
 | `label`          | VARCHAR(16) | PK (part 2)                  | NOT NULL                                                 | e.g. `A12`                              |
+| `position`       | INT         |                              | NOT NULL                                                 | Order the admin listed the seat in (for display) |
 | `state`          | VARCHAR(16) |                              | NOT NULL, CHECK in (`available`, `held`, `confirmed`)    |                                         |
 | `reservation_id` | UUID        | FK → `reservations.id`       | NULL                                                     | Reservation currently holding the seat  |
 | `updated_at`     | TIMESTAMPTZ |                              | NOT NULL, default `now()`                                |                                         |

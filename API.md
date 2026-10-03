@@ -214,6 +214,7 @@ GET /shows/{id}
 }
 ```
 
+- Seats are listed in the order they were given when the show was created.
 - Seat `status`: `available` / `held` / `confirmed`.
 - Show `status`: `active` / `cancelled`.
 - **Invariant:** `counts.available + counts.held + counts.confirmed == total_seats`, always — the counts and seat list are read in a single consistent snapshot.
