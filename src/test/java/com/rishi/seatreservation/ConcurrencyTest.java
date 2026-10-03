@@ -173,10 +173,10 @@ class ConcurrencyTest {
         String alice = users.get(0);
         String bob = users.get(1);
 
-        String body = "{\"seats\":[\"S1\"],\"idempotency_key\":\"k\",\"user_id\":\"" + bob + "\"}";
+        String body = "{\"seats\":[\"S1\"],\"idempotency_key\":\"k\",\"user_id\":\"" + userIds.get(bob) + "\"}";
         ResponseEntity<String> r = exchange(HttpMethod.POST, "/shows/" + showId + "/reserve", tokenFor(alice), body);
         JsonNode reservation = json.readTree(r.getBody());
-        assertEquals(alice, reservation.get("user_id").asText(), "spoofed user_id in body is ignored");
+        assertEquals(userIds.get(alice), reservation.get("user_id").asText(), "spoofed user_id in body is ignored");
 
         ResponseEntity<String> bobCancel = exchange(HttpMethod.POST,
                 "/reservations/" + reservation.get("reservation_id").asText() + "/cancel", tokenFor(bob), null);
@@ -217,13 +217,16 @@ class ConcurrencyTest {
     }
 
     private final Map<String, String> tokens = new ConcurrentHashMap<String, String>();
+    private final Map<String, String> userIds = new ConcurrentHashMap<String, String>();
 
     private List<String> newUsers(int n) throws Exception {
         final String run = UUID.randomUUID().toString().substring(0, 8);
         runConcurrently(Math.min(n, 50), i -> {
             for (int u = i; u < n; u += Math.min(n, 50)) {
                 String email = "u" + u + "-" + run + "@test.local";
-                post("/auth/register", null, "{\"user_id\":\"" + email + "\",\"password\":\"password1\"}");
+                ResponseEntity<String> registered = post("/auth/register", null,
+                        "{\"email\":\"" + email + "\",\"password\":\"password1\"}");
+                userIds.put(email, json.readTree(registered.getBody()).get("user_id").asText());
                 tokens.put(email, token(email, "password1"));
             }
             return 0;
@@ -241,7 +244,7 @@ class ConcurrencyTest {
 
     private String token(String user, String password) throws Exception {
         ResponseEntity<String> r = post("/auth/token", null,
-                "{\"user_id\":\"" + user + "\",\"password\":\"" + password + "\"}");
+                "{\"email\":\"" + user + "\",\"password\":\"" + password + "\"}");
         return json.readTree(r.getBody()).get("token").asText();
     }
 

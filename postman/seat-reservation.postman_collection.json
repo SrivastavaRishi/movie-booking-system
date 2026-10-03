@@ -26,6 +26,14 @@
       "value": ""
     },
     {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "user2Id",
+      "value": ""
+    },
+    {
       "key": "userPassword",
       "value": "password123"
     },
@@ -161,7 +169,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"role\": \"ADMIN\"\n}",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"role\": \"ADMIN\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -176,7 +184,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });"
+                  "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set(\"userId\", pm.response.json().user_id);"
                 ]
               }
             }
@@ -204,7 +213,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -218,7 +227,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });"
+                  "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set(\"user2Id\", pm.response.json().user_id);"
                 ]
               }
             }
@@ -246,7 +256,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -288,7 +298,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -331,7 +341,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -374,7 +384,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"{{user2Email}}\",\n  \"password\": \"{{userPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -417,7 +427,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"{{userEmail}}\",\n  \"password\": \"wrong-password\"\n}",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"wrong-password\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -884,7 +894,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"seats\": [\n    \"B2\"\n  ],\n  \"idempotency_key\": \"{{$guid}}\",\n  \"user_id\": \"{{userEmail}}\"\n}",
+              "raw": "{\n  \"seats\": [\n    \"B2\"\n  ],\n  \"idempotency_key\": \"{{$guid}}\",\n  \"user_id\": \"{{userId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -899,7 +909,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.test(\"booked as the token user\", function () { pm.expect(pm.response.json().user_id).to.eql(pm.collectionVariables.get(\"user2Email\")); });"
+                  "pm.test(\"booked as the token user\", function () { pm.expect(pm.response.json().user_id).to.eql(pm.collectionVariables.get(\"user2Id\")); });"
                 ]
               }
             }

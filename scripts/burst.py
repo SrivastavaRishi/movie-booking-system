@@ -122,7 +122,7 @@ def main():
     if status != 200:
         sys.exit("service is not ready")
 
-    status, body = client.call("POST", "/auth/token", {"user_id": ADMIN_USER, "password": ADMIN_PASSWORD})
+    status, body = client.call("POST", "/auth/token", {"email": ADMIN_USER, "password": ADMIN_PASSWORD})
     if status != 200:
         sys.exit("admin login failed: %s %s" % (status, body))
     admin = body["token"]
@@ -138,8 +138,8 @@ def main():
     emails = ["buyer%d-%s@burst.local" % (i, run_id) for i in range(args.users + 1)]
 
     def signup(i):
-        client.call("POST", "/auth/register", {"user_id": emails[i], "password": PASSWORD})
-        s, b = client.call("POST", "/auth/token", {"user_id": emails[i], "password": PASSWORD})
+        client.call("POST", "/auth/register", {"email": emails[i], "password": PASSWORD})
+        s, b = client.call("POST", "/auth/token", {"email": emails[i], "password": PASSWORD})
         return b["token"] if s == 200 else None
 
     t0 = time.time()

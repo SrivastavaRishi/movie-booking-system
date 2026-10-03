@@ -38,7 +38,8 @@ users 1 ──── * user_quota * ──── 1 shows
 
 | Column          | Type         | Key | Constraints                              | Notes                    |
 |-----------------|--------------|-----|------------------------------------------|--------------------------|
-| `user_id`       | VARCHAR(254) | PK  |                                          | Email, stored lowercase  |
+| `id`            | UUID         | PK  |                                          | Exposed as `user_id` in the API and as the JWT `sub` |
+| `email`         | VARCHAR(254) |     | NOT NULL, UNIQUE, CHECK `email = lower(email)` | Stored lowercase         |
 | `password_hash` | VARCHAR(100) |     | NOT NULL                                 | bcrypt hash              |
 | `role`          | VARCHAR(16)  |     | NOT NULL, CHECK in (`USER`, `ADMIN`)     |                          |
 | `created_at`    | TIMESTAMPTZ  |     | NOT NULL, default `now()`                |                          |
@@ -79,7 +80,7 @@ One row per seat per show (2 shows × 100 seats = 200 rows).
 |-------------------|--------------|-------------------------|--------------------------------------------------------------------|------------------------------------------------|
 | `id`              | UUID         | PK                      |                                                                    |                                                |
 | `show_id`         | UUID         | FK → `shows.id`         | NOT NULL                                                           |                                                |
-| `user_id`         | VARCHAR(254) | FK → `users.user_id`    | NOT NULL                                                           | From the token, never the request body         |
+| `user_id`         | UUID         | FK → `users.id`         | NOT NULL                                                           | From the token, never the request body         |
 | `idempotency_key` | VARCHAR(128) |                         | NOT NULL                                                           |                                                |
 | `request_hash`    | CHAR(64)     |                         | NOT NULL                                                           | SHA-256 of show id + sorted seats              |
 | `seats`           | TEXT[]       |                         | NOT NULL                                                           | Seats booked (kept as history after cancel)    |
@@ -99,7 +100,7 @@ One row per (show, user) — the row that is locked to enforce the per-user limi
 | Column       | Type         | Key                               | Constraints        | Notes                                      |
 |--------------|--------------|-----------------------------------|--------------------|--------------------------------------------|
 | `show_id`    | UUID         | PK (part 1), FK → `shows.id`      | NOT NULL           |                                            |
-| `user_id`    | VARCHAR(254) | PK (part 2), FK → `users.user_id` | NOT NULL           |                                            |
+| `user_id`    | UUID         | PK (part 2), FK → `users.id`      | NOT NULL           |                                            |
 | `seats_held` | INT          |                                   | NOT NULL, CHECK ≥ 0 | Seats the user currently holds in the show |
 
 - Primary key: (`show_id`, `user_id`).

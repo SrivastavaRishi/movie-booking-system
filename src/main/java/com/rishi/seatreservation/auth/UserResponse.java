@@ -1,17 +1,25 @@
 package com.rishi.seatreservation.auth;
 
+import java.util.UUID;
+
 public class UserResponse {
 
-    private final String userId;
+    private final UUID userId;
+    private final String email;
     private final String role;
 
-    public UserResponse(String userId, String role) {
+    public UserResponse(UUID userId, String email, String role) {
         this.userId = userId;
+        this.email = email;
         this.role = role;
     }
 
-    public String getUserId() {
+    public UUID getUserId() {
         return userId;
+    }
+
+    public String getEmail() {
+        return email;
     }
 
     public String getRole() {

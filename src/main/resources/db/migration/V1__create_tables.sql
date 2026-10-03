@@ -1,7 +1,9 @@
 -- Schema described in DB.md.
 
 CREATE TABLE users (
-    user_id       VARCHAR(254) PRIMARY KEY,
+    id            UUID PRIMARY KEY,
+    -- Stored lowercase; UNIQUE so two racing registrations cannot create the same email.
+    email         VARCHAR(254) NOT NULL UNIQUE CHECK (email = lower(email)),
     password_hash VARCHAR(100) NOT NULL,
     role          VARCHAR(16)  NOT NULL CHECK (role IN ('USER', 'ADMIN')),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
@@ -21,7 +23,7 @@ CREATE TABLE shows (
 CREATE TABLE reservations (
     id              UUID PRIMARY KEY,
     show_id         UUID         NOT NULL REFERENCES shows (id),
-    user_id         VARCHAR(254) NOT NULL REFERENCES users (user_id),
+    user_id         UUID         NOT NULL REFERENCES users (id),
     idempotency_key VARCHAR(128) NOT NULL,
     request_hash    CHAR(64)     NOT NULL,
     seats           TEXT[]       NOT NULL,
@@ -54,7 +56,7 @@ CREATE INDEX seats_reservation_idx ON seats (reservation_id);
 -- Seats each user currently holds per show; the row locked to enforce the per-user limit.
 CREATE TABLE user_quota (
     show_id    UUID         NOT NULL REFERENCES shows (id),
-    user_id    VARCHAR(254) NOT NULL REFERENCES users (user_id),
+    user_id    UUID         NOT NULL REFERENCES users (id),
     seats_held INT          NOT NULL CHECK (seats_held >= 0),
     PRIMARY KEY (show_id, user_id)
 );

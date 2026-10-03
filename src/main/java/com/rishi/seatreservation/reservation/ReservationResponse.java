@@ -8,7 +8,7 @@ public class ReservationResponse {
 
     private final UUID reservationId;
     private final UUID showId;
-    private final String userId;
+    private final UUID userId;
     private final List<String> seats;
     private final long amountPaise;
     private final String status;
@@ -34,7 +34,7 @@ public class ReservationResponse {
         return showId;
     }
 
-    public String getUserId() {
+    public UUID getUserId() {
         return userId;
     }
 

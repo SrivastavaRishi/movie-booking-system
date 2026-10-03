@@ -46,7 +46,7 @@ public class ReservationService {
         this.takenSeats = takenSeats;
     }
 
-    public ReserveResult reserve(final UUID showId, final String userId, ReserveRequest body, String headerKey) {
+    public ReserveResult reserve(final UUID showId, final UUID userId, ReserveRequest body, String headerKey) {
         final String key = resolveKey(body, headerKey);
         final List<String> seats = validateSeats(body);
         final String hash = requestHash(showId, seats);
@@ -83,7 +83,7 @@ public class ReservationService {
         }
     }
 
-    private ReserveResult reserveInTransaction(UUID showId, String userId, String key, String hash,
+    private ReserveResult reserveInTransaction(UUID showId, UUID userId, String key, String hash,
                                                List<String> seats) {
         // (1) Shared lock on the show: blocks a concurrent cancel-show until we commit.
         ShowRepository.ShowRow show = shows.lockForShare(showId);
@@ -158,7 +158,7 @@ public class ReservationService {
                 "This idempotency key was already used with a different request");
     }
 
-    public ReservationResponse cancel(final UUID reservationId, final String userId) {
+    public ReservationResponse cancel(final UUID reservationId, final UUID userId) {
         if (!limiter.tryAcquire()) {
             throw ApiException.rateLimited("Too many requests in flight, please retry");
         }

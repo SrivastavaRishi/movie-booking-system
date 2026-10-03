@@ -20,7 +20,7 @@ Every error response (4xx / 5xx) has the same shape:
 
 ## 1. Register — `POST /auth/register`
 
-Creates a new user. Public endpoint (no auth required).
+Creates a new user and assigns it a UUID `user_id`. Public endpoint (no auth required).
 Always creates a `USER` — this endpoint can never create an admin. Admins are pre-seeded (see `ASSUMPTIONS.md`).
 
 ### Request
@@ -31,12 +31,12 @@ Content-Type: application/json
 ```
 
 ```json
-{ "user_id": "rishi@example.com", "password": "..." }
+{ "email": "rishi@example.com", "password": "..." }
 ```
 
 | Field      | Type   | Required | Rules                                                     |
 |------------|--------|----------|-----------------------------------------------------------|
-| `user_id`  | string | yes      | Valid email, max 254 chars. Stored lowercase.             |
+| `email`    | string | yes      | Valid email, max 254 chars. Stored lowercase. Validated on the server even if a frontend validates too. |
 | `password` | string | yes      | 8–72 characters                                           |
 
 Any other field in the body (e.g. `"role": "ADMIN"`) is ignored.
@@ -45,7 +45,8 @@ Any other field in the body (e.g. `"role": "ADMIN"`) is ignored.
 
 ```json
 {
-  "user_id": "rishi@example.com",
+  "user_id": "342c2f0d-1674-4317-a64c-10be5fb7a316",
+  "email": "rishi@example.com",
   "role": "USER"
 }
 ```
@@ -56,9 +57,9 @@ The password is stored only as a bcrypt hash and is never returned.
 
 | Case                                           | Status |
 |------------------------------------------------|--------|
-| `user_id` missing / not a valid email          | 400    |
+| `email` missing / not a valid email            | 400    |
 | `password` missing / outside 8–72 characters   | 400    |
-| User with this `user_id` already exists        | 409    |
+| User with this `email` already exists          | 409    |
 
 ---
 
@@ -75,17 +76,17 @@ Content-Type: application/json
 ```
 
 ```json
-{ "user_id": "rishi@example.com", "password": "..." }
+{ "email": "rishi@example.com", "password": "..." }
 ```
 
 | Field      | Type   | Required |
 |------------|--------|----------|
-| `user_id`  | string | yes      |
+| `email`    | string | yes      |
 | `password` | string | yes      |
 
 ### Behaviour
 
-- Look up the user by `user_id` (lowercased).
+- Look up the user by `email` (lowercased).
 - User not found, or password does not match → `401`.
 - Otherwise → return a token carrying the user's stored role.
 
@@ -96,18 +97,19 @@ Content-Type: application/json
   "token": "eyJhbGciOiJIUzI1NiJ9...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "user_id": "rishi@example.com",
+  "user_id": "342c2f0d-1674-4317-a64c-10be5fb7a316",
+  "email": "rishi@example.com",
   "role": "USER"
 }
 ```
 
-Token claims: `sub` (user id), `role` (`USER` / `ADMIN`), `exp` (expiry). Signed with HS256.
+Token claims: `sub` (the user's UUID `user_id`), `role` (`USER` / `ADMIN`), `exp` (expiry). Signed with HS256.
 
 ### Errors
 
 | Case                                              | Status |
 |---------------------------------------------------|--------|
-| `user_id` or `password` missing                   | 400    |
+| `email` or `password` missing                     | 400    |
 | User not found, or wrong password                 | 401    |
 
 "User not found" and "wrong password" both return the same `401` with the same message, so the API does not reveal which emails are registered.
@@ -305,7 +307,7 @@ Any `user_id` in the body is ignored — identity comes only from the token.
 {
   "reservation_id": "a91f…",
   "show_id": "6f1c2a9e-…",
-  "user_id": "rishi@example.com",
+  "user_id": "342c2f0d-1674-4317-a64c-10be5fb7a316",
   "seats": ["A12", "A13"],
   "amount_paise": 50000,
   "status": "confirmed",
@@ -373,7 +375,7 @@ No body.
 {
   "reservation_id": "a91f…",
   "show_id": "6f1c2a9e-…",
-  "user_id": "rishi@example.com",
+  "user_id": "342c2f0d-1674-4317-a64c-10be5fb7a316",
   "seats": ["A12", "A13"],
   "amount_paise": 50000,
   "status": "cancelled",

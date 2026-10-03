@@ -37,7 +37,7 @@ public class AuthFilter extends OncePerRequestFilter {
             AuthUser user = jwtService.verify(header.substring(PREFIX.length()).trim());
             if (user != null) {
                 request.setAttribute(ATTRIBUTE, user);
-                MDC.put("user_id", user.getUserId());
+                MDC.put("user_id", user.getUserId().toString());
             }
         }
         chain.doFilter(request, response);

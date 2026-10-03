@@ -4,18 +4,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public class UserRepository {
 
     /** A stored user: just what login needs. */
     public static class UserRow {
-        public final String userId;
+        public final UUID id;
+        public final String email;
         public final String passwordHash;
         public final String role;
 
-        UserRow(String userId, String passwordHash, String role) {
-            this.userId = userId;
+        UserRow(UUID id, String email, String passwordHash, String role) {
+            this.id = id;
+            this.email = email;
             this.passwordHash = passwordHash;
             this.role = role;
         }
@@ -27,20 +30,21 @@ public class UserRepository {
         this.jdbc = jdbc;
     }
 
-    /** Inserts a USER. Returns false if the user id is already taken (no error, no race). */
-    public boolean insertUser(String userId, String passwordHash) {
+    /** Inserts a USER. Returns false if the email is already registered (no error, no race). */
+    public boolean insertUser(UUID id, String email, String passwordHash) {
         int rows = jdbc.update(
-                "INSERT INTO users (user_id, password_hash, role) VALUES (?, ?, 'USER') "
-                        + "ON CONFLICT (user_id) DO NOTHING",
-                userId, passwordHash);
+                "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, 'USER') "
+                        + "ON CONFLICT (email) DO NOTHING",
+                id, email, passwordHash);
         return rows == 1;
     }
 
-    public UserRow find(String userId) {
+    public UserRow findByEmail(String email) {
         List<UserRow> rows = jdbc.query(
-                "SELECT user_id, password_hash, role FROM users WHERE user_id = ?",
-                (rs, i) -> new UserRow(rs.getString("user_id"), rs.getString("password_hash"), rs.getString("role")),
-                userId);
+                "SELECT id, email, password_hash, role FROM users WHERE email = ?",
+                (rs, i) -> new UserRow(rs.getObject("id", UUID.class), rs.getString("email"),
+                        rs.getString("password_hash"), rs.getString("role")),
+                email);
         return rows.isEmpty() ? null : rows.get(0);
     }
 }

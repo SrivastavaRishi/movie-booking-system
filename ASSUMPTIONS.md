@@ -38,7 +38,7 @@ This file lists the assumptions made in this solution.
 
 ## Authentication
 
-- **User id is the email.** Users register with an email (used as `user_id`) and a password. The email is not verified — there is no confirmation mail or OTP. Email verification is a future extension.
+- **Users log in with email + password.** Each user gets a UUID `user_id`; the email is a separate unique field. The email format is validated on the server (a frontend may validate too, but the API can be called directly), but the email is not verified — there is no confirmation mail or OTP. Email verification is a future extension.
 
 - **Tokens are bearer tokens.** Auth uses signed (not encrypted) JWTs. Whoever holds a valid token is treated as that user until the token expires, so tokens must only be sent over HTTPS. Tokens are short-lived (1 hour) to limit the damage if one is leaked.
 - **No revocation or refresh.** A token cannot be revoked before it expires (no logout / denylist), and there are no refresh tokens — the client simply calls `/auth/token` again. Revocation (e.g. a `token_version` on the user) and refresh tokens are future extensions.

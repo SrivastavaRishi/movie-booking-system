@@ -1,17 +1,21 @@
 package com.rishi.seatreservation.auth;
 
+import java.util.UUID;
+
 public class TokenResponse {
 
     private final String token;
     private final String tokenType = "Bearer";
     private final long expiresIn;
-    private final String userId;
+    private final UUID userId;
+    private final String email;
     private final String role;
 
-    public TokenResponse(String token, long expiresIn, String userId, String role) {
+    public TokenResponse(String token, long expiresIn, UUID userId, String email, String role) {
         this.token = token;
         this.expiresIn = expiresIn;
         this.userId = userId;
+        this.email = email;
         this.role = role;
     }
 
@@ -27,8 +31,12 @@ public class TokenResponse {
         return expiresIn;
     }
 
-    public String getUserId() {
+    public UUID getUserId() {
         return userId;
+    }
+
+    public String getEmail() {
+        return email;
     }
 
     public String getRole() {

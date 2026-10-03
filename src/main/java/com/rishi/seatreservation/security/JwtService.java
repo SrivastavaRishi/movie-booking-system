@@ -10,8 +10,9 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
-/** Issues and verifies HS256-signed JWTs carrying the user id (sub) and role. */
+/** Issues and verifies HS256-signed JWTs carrying the user's UUID (sub) and role. */
 @Service
 public class JwtService {
 
@@ -34,10 +35,10 @@ public class JwtService {
         return ttlSeconds;
     }
 
-    public String issue(String userId, Role role) {
+    public String issue(UUID userId, Role role) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
-                .subject(userId)
+                .subject(userId.toString())
                 .claim(ROLE_CLAIM, role.name())
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + ttlSeconds * 1000))
@@ -53,12 +54,12 @@ public class JwtService {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            String userId = claims.getSubject();
+            String subject = claims.getSubject();
             String role = claims.get(ROLE_CLAIM, String.class);
-            if (userId == null || role == null) {
+            if (subject == null || role == null) {
                 return null;
             }
-            return new AuthUser(userId, Role.valueOf(role));
+            return new AuthUser(UUID.fromString(subject), Role.valueOf(role));
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }

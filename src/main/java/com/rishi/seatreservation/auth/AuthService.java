@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
@@ -33,35 +34,37 @@ public class AuthService {
     }
 
     public UserResponse register(CredentialsRequest req) {
-        String userId = normalizeEmail(req == null ? null : req.getUserId());
-        if (!EMAIL.matcher(userId).matches() || userId.length() > MAX_EMAIL) {
-            throw ApiException.invalid("user_id must be a valid email (max 254 chars)");
+        // Server-side check even if a frontend validates too: the API can be called directly.
+        String email = normalizeEmail(req == null ? null : req.getEmail());
+        if (!EMAIL.matcher(email).matches() || email.length() > MAX_EMAIL) {
+            throw ApiException.invalid("email must be a valid email address (max 254 chars)");
         }
         String password = req.getPassword();
         if (password == null || password.length() < MIN_PASSWORD
                 || password.getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
             throw ApiException.invalid("password must be 8-72 characters");
         }
-        if (!users.insertUser(userId, encoder.encode(password))) {
-            throw ApiException.conflict("user_exists", "A user with this user_id already exists");
+        UUID id = UUID.randomUUID();
+        if (!users.insertUser(id, email, encoder.encode(password))) {
+            throw ApiException.conflict("user_exists", "A user with this email already exists");
         }
-        return new UserResponse(userId, Role.USER.name());
+        return new UserResponse(id, email, Role.USER.name());
     }
 
     public TokenResponse token(CredentialsRequest req) {
-        String userId = normalizeEmail(req == null ? null : req.getUserId());
+        String email = normalizeEmail(req == null ? null : req.getEmail());
         String password = req == null ? null : req.getPassword();
-        if (userId.isEmpty() || password == null || password.isEmpty()) {
-            throw ApiException.invalid("user_id and password are required");
+        if (email.isEmpty() || password == null || password.isEmpty()) {
+            throw ApiException.invalid("email and password are required");
         }
-        UserRepository.UserRow user = users.find(userId);
+        UserRepository.UserRow user = users.findByEmail(email);
         boolean matches = encoder.matches(password, user != null ? user.passwordHash : dummyHash);
         if (user == null || !matches) {
             // Same response for unknown user and wrong password: do not reveal which emails exist.
-            throw ApiException.unauthorized("Invalid user_id or password");
+            throw ApiException.unauthorized("Invalid email or password");
         }
         Role role = Role.valueOf(user.role);
-        return new TokenResponse(jwt.issue(user.userId, role), jwt.getTtlSeconds(), user.userId, role.name());
+        return new TokenResponse(jwt.issue(user.id, role), jwt.getTtlSeconds(), user.id, user.email, role.name());
     }
 
     private static String normalizeEmail(String raw) {

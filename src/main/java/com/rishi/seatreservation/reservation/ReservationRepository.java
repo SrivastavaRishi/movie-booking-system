@@ -24,7 +24,7 @@ public class ReservationRepository {
     public static class ReservationRow {
         public final UUID id;
         public final UUID showId;
-        public final String userId;
+        public final UUID userId;
         public final String requestHash;
         public final List<String> seats;
         public final long amountPaise;
@@ -32,7 +32,7 @@ public class ReservationRepository {
         public final Instant createdAt;
         public final Instant cancelledAt;
 
-        ReservationRow(UUID id, UUID showId, String userId, String requestHash, List<String> seats,
+        ReservationRow(UUID id, UUID showId, UUID userId, String requestHash, List<String> seats,
                        long amountPaise, String status, Instant createdAt, Instant cancelledAt) {
             this.id = id;
             this.showId = showId;
@@ -66,7 +66,7 @@ public class ReservationRepository {
     private static final RowMapper<ReservationRow> MAPPER = (rs, i) -> new ReservationRow(
             rs.getObject("id", UUID.class),
             rs.getObject("show_id", UUID.class),
-            rs.getString("user_id"),
+            rs.getObject("user_id", UUID.class),
             rs.getString("request_hash"),
             toList(rs.getArray("seats")),
             rs.getLong("amount_paise"),
@@ -85,7 +85,7 @@ public class ReservationRepository {
      * If another transaction is inserting the same key right now, this statement waits for it to
      * commit and then sees the conflict -> exactly once. Returns the new row, or null on conflict.
      */
-    public ReservationRow insertIfKeyUnused(UUID id, UUID showId, String userId, String idempotencyKey,
+    public ReservationRow insertIfKeyUnused(UUID id, UUID showId, UUID userId, String idempotencyKey,
                                             String requestHash, List<String> seats, long amountPaise) {
         List<ReservationRow> rows = jdbc.query(
                 "INSERT INTO reservations (id, show_id, user_id, idempotency_key, request_hash, seats, "
@@ -96,7 +96,7 @@ public class ReservationRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public ReservationRow findByUserAndKey(String userId, String idempotencyKey) {
+    public ReservationRow findByUserAndKey(UUID userId, String idempotencyKey) {
         List<ReservationRow> rows = jdbc.query(
                 "SELECT " + COLUMNS + " FROM reservations WHERE user_id = ? AND idempotency_key = ?",
                 MAPPER, userId, idempotencyKey);
@@ -108,7 +108,7 @@ public class ReservationRepository {
      * within the limit. The row lock makes one user's parallel requests take turns, and each re-checks
      * the limit. Returns the new count, or null if the limit would be exceeded.
      */
-    public Integer addToQuota(UUID showId, String userId, int n, int limit) {
+    public Integer addToQuota(UUID showId, UUID userId, int n, int limit) {
         List<Integer> rows = jdbc.query(
                 "INSERT INTO user_quota (show_id, user_id, seats_held) VALUES (?, ?, ?) "
                         + "ON CONFLICT (show_id, user_id) DO UPDATE "
@@ -119,7 +119,7 @@ public class ReservationRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public void subtractFromQuota(UUID showId, String userId, int n) {
+    public void subtractFromQuota(UUID showId, UUID userId, int n) {
         jdbc.update("UPDATE user_quota SET seats_held = seats_held - ? WHERE show_id = ? AND user_id = ?",
                 n, showId, userId);
     }
@@ -146,7 +146,7 @@ public class ReservationRepository {
     }
 
     /** Ownership is part of the WHERE clause: another user's reservation is simply "not found". */
-    public ReservationRow findOwned(UUID id, String userId) {
+    public ReservationRow findOwned(UUID id, UUID userId) {
         List<ReservationRow> rows = jdbc.query(
                 "SELECT " + COLUMNS + " FROM reservations WHERE id = ? AND user_id = ?", MAPPER, id, userId);
         return rows.isEmpty() ? null : rows.get(0);
