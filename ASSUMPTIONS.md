@@ -17,6 +17,23 @@ This file lists the assumptions made in this solution.
 
 ## Reservations
 
+- **Per-user limit — interpretation.** The problem statement says:
+
+  > "**Per-user limit:** a user cannot hold more than `per_user_limit` seats for a show (default 4). Over-limit is a clean decline, not an error."
+
+  and, in the correctness bar:
+
+  > "Per-user limit holds under concurrency (a user firing 10 parallel reserves on a limit=4 show ends with at most 4 held)."
+
+  This could be read as either (a) a cap on seats **per request**, or (b) a cap on the **total** seats a user holds for a show. We enforce **both**:
+
+  | Rule | Example (limit = 4) | Response |
+  |------|---------------------|----------|
+  | (a) Per request: at most `per_user_limit` seats in a single reserve call | Asking for 5 seats in one call | `400 invalid_request` |
+  | (b) Per user per show: total confirmed seats held by the user for that show ≤ `per_user_limit`, across all calls, enforced atomically under concurrency | User holds 3, asks for 2 more | `409 per_user_limit` |
+
+  The limit is **per show** — seats held in one show do not count towards another show. Cancelled reservations free up the limit.
+
 - **Whole-reservation cancel only.** A user cancels an entire reservation; cancelling only some of its seats is not supported (future extension).
 
 ## Authentication
