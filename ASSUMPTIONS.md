@@ -13,6 +13,11 @@ This file lists the assumptions made in this solution.
 
 - **No payments, no refunds.** There is no payment step; a reservation is confirmed immediately. When an admin cancels a show, its reservations are marked `cancelled_by_admin` and seats are released — no refund flow is modelled.
 - **Cancelled shows are final.** A cancelled show cannot be restored.
+- **No show time.** Shows have no start time, so there is no cut-off for booking or cancelling (e.g. "no cancellations within 1 hour of the show"). Show timings are a future extension.
+
+## Reservations
+
+- **Whole-reservation cancel only.** A user cancels an entire reservation; cancelling only some of its seats is not supported (future extension).
 
 ## Authentication
 
