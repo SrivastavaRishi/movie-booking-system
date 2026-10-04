@@ -168,6 +168,34 @@ On Windows, run `python scripts/burst.py <BASE_URL>` instead of `./burst.sh`.
 
 ---
 
+## Load test results (live EC2 instance)
+
+Instance: **AWS EC2 `t4g.small`** (2 vCPU ARM, 2 GB RAM), app + PostgreSQL in Docker Compose, default settings. Each run used `./burst.sh` and passed **all 8 checks** (no double-sell, one winner per hot seat, zero 5xx, reconciliation invariant, API counts match the 201s, per-user limit, `/metrics` counters match observed outcomes, seats gauge matches the API).
+
+| Run | Load generated from | Reserve requests | Concurrency | Throughput | 5xx | 429 | Hot seats |
+|-----|---------------------|------------------|-------------|------------|-----|-----|-----------|
+| 1 | Laptop → EC2 over the internet | 500 storm + 5,549 | 200 | ~357 req/s | 0 | 0 | 5 seats, exactly 1 winner each |
+| 2 | Laptop → EC2 over the internet | 1,000 storm + 22,227 | 500 | ~365 req/s | 0 | 0 | 10 seats, exactly 1 winner each |
+| 3 | Inside EC2 → `localhost` (no network latency) | 300 storm + 22,211 | 400 | ~688 req/s | 0 | 0 | 10 seats, exactly 1 winner each |
+
+```bash
+# run 2
+./burst.sh http://16.178.54.244:8080 --users 1000 --seats 1000 --hot-seats 10 --requests 20000 --concurrency 500 --timeout 60
+```
+
+**Observations**
+
+- **Reserving is cheap.** During the reserve phase the app averaged ~30% of the instance's CPU, PostgreSQL peaked below 60% of one core, app memory stayed under 330 MB (limit 768 MB), and the DB connection pool never queued (`hikaricp_connections_pending = 0`). Most hot-seat losers are declined from the in-memory "already taken" set without a database round trip.
+- **Runs 1–2 were limited by the client**, not the server: ~0.65 s round trip from the laptop to the instance. Run 3 removes the network and still leaves headroom (the load generator shared the same 2 vCPUs).
+- **Registration/login is the expensive path.** bcrypt (cost 10) saturates both vCPUs at ~9 new users/second. Bulk user creation before a burst is slow; lowering `BCRYPT_STRENGTH` trades hashing strength for speed.
+- **CPU credits.** `t4g` is a burstable instance: short bursts spend credits (the balance stayed ~87 during these runs), but sustained load would drain them and throttle the instance to its baseline.
+
+**CloudWatch during the runs** (5-minute averages, so short peaks appear lower than the per-second figures above):
+
+![CloudWatch metrics for the EC2 instance during the burst runs](cloudwatch-burst.png)
+
+---
+
 ## Tests
 
 Concurrency tests fire real parallel HTTP requests at the app backed by a **real PostgreSQL** (no mocks): hot-seat race, per-user limit under parallel requests, same-key retries, opposite-order multi-seat requests (deadlock check), reserves racing a show cancel, concurrent cancels, and token-vs-body identity.
