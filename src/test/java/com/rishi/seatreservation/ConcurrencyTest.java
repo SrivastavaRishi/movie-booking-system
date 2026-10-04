@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@AutoConfigureObservability // Spring Boot disables metrics export in tests unless asked
 class ConcurrencyTest {
 
     private static final String ADMIN = "admin@seatbooking.local";
@@ -182,6 +184,53 @@ class ConcurrencyTest {
                 "/reservations/" + reservation.get("reservation_id").asText() + "/cancel", tokenFor(bob), null);
         assertEquals(404, bobCancel.getStatusCode().value(), "cannot cancel someone else's reservation");
         assertEquals(1, show(showId).get("counts").get("confirmed").asInt());
+    }
+
+    @Test
+    void metrics_reconcileWithApiState() throws Exception {
+        double confirmedBefore = metric("reservation_seats_confirmed_total", null);
+        double releasedBefore = metric("reservation_seats_released_total", null);
+        double takenBefore = metric("reservations_declined_total", "reason=\"seat_taken\"");
+
+        String showId = createShow(seatLabels(10), 4);
+        List<String> users = newUsers(50);
+        List<Integer> statuses = runConcurrently(users.size(), i ->
+                reserve(users.get(i), showId, Arrays.asList("S1", "S2"), "k").getStatusCode().value());
+        int winners = count(statuses, 201);
+        int losers = count(statuses, 409);
+
+        String winner = null;
+        for (int i = 0; i < statuses.size(); i++) {
+            if (statuses.get(i) == 201) {
+                winner = users.get(i);
+            }
+        }
+        reserve(winner, showId, Collections.singletonList("S3"), "k2");          // +1 seat
+        String rid = json.readTree(reserve(winner, showId, Collections.singletonList("S3"), "k2").getBody())
+                .get("reservation_id").asText();                                   // replay, no change
+        exchange(HttpMethod.POST, "/reservations/" + rid + "/cancel", tokenFor(winner), null); // -1 seat
+
+        JsonNode counts = show(showId).get("counts");
+        String gauge = "show_id=\"" + showId + "\",state=";
+        assertEquals(counts.get("confirmed").asInt(), (int) metric("seats", gauge + "\"confirmed\""), "gauge = API");
+        assertEquals(counts.get("available").asInt(), (int) metric("seats", gauge + "\"available\""), "gauge = API");
+        assertEquals(1, winners);
+        assertEquals(3, (int) (metric("reservation_seats_confirmed_total", null) - confirmedBefore));
+        assertEquals(1, (int) (metric("reservation_seats_released_total", null) - releasedBefore));
+        assertTrue(metric("reservations_declined_total", "reason=\"seat_taken\"") - takenBefore >= losers);
+    }
+
+    /** Reads one value from GET /metrics. labelFragment narrows to a series, e.g. reason="seat_taken". */
+    private double metric(String name, String labelFragment) {
+        String body = exchange(HttpMethod.GET, "/metrics", null, null).getBody();
+        for (String line : body.split("\n")) {
+            if (line.startsWith(name + "{") || line.startsWith(name + " ")) {
+                if (labelFragment == null || line.contains(labelFragment)) {
+                    return Double.parseDouble(line.substring(line.lastIndexOf(' ') + 1));
+                }
+            }
+        }
+        return 0;
     }
 
     // ---------------------------------------------------------------- helpers

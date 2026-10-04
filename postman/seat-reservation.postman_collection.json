@@ -97,6 +97,40 @@
               }
             }
           ]
+        },
+        {
+          "name": "Metrics (Prometheus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Prometheus text format. Public. See API.md section 10."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"exposes the business metrics\", function () {",
+                  "  const body = pm.response.text();",
+                  "  [\"reservations_confirmed_total\", \"reservation_seats_confirmed_total\", \"reservation_seats_released_total\"].forEach(function (m) {",
+                  "    pm.expect(body).to.include(m);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1153,6 +1187,61 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metrics: seats gauge matches show state",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Reads the show's counts from the API first, then checks the /metrics seats gauge reports the same numbers."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest(pm.environment.get(\"baseUrl\") + \"/shows/\" + pm.environment.get(\"showId\"), function (err, res) {",
+                  "  pm.environment.set(\"showCounts\", JSON.stringify(res.json().counts));",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "const showId = pm.environment.get(\"showId\");",
+                  "const api = JSON.parse(pm.environment.get(\"showCounts\"));",
+                  "function gauge(state) {",
+                  "  const line = pm.response.text().split(\"\\n\").find(function (l) {",
+                  "    return l.startsWith(\"seats{\") && l.includes('show_id=\"' + showId + '\"') && l.includes('state=\"' + state + '\"');",
+                  "  });",
+                  "  return line ? Number(line.substring(line.lastIndexOf(\" \") + 1)) : NaN;",
+                  "}",
+                  "pm.test(\"seats gauge == GET /shows/{id} counts\", function () {",
+                  "  pm.expect(gauge(\"available\")).to.eql(api.available);",
+                  "  pm.expect(gauge(\"held\")).to.eql(api.held);",
+                  "  pm.expect(gauge(\"confirmed\")).to.eql(api.confirmed);",
+                  "});",
+                  "pm.test(\"declines counted by reason\", function () {",
+                  "  pm.expect(pm.response.text()).to.include('reservations_declined_total{application=\"seat-reservation\",reason=\"seat_taken\"}');",
+                  "});"
                 ]
               }
             }

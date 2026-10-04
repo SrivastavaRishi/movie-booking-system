@@ -1,0 +1,11 @@
+# Local Prometheus for watching a burst. Start with:  docker compose --profile monitoring up -d
+# UI: http://localhost:9090
+global:
+  scrape_interval: 5s       # short, so a burst is visible while it happens
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: seat-reservation
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8080"]   # the app's Compose service name and internal port

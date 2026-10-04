@@ -1,6 +1,8 @@
 package com.rishi.seatreservation.show;
 
 import com.rishi.seatreservation.common.ApiException;
+import com.rishi.seatreservation.metrics.ReservationMetrics;
+import com.rishi.seatreservation.metrics.SeatGauges;
 import com.rishi.seatreservation.reservation.TakenSeatCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +28,16 @@ public class ShowService {
     private final ShowRepository shows;
     private final TransactionTemplate tx;
     private final TakenSeatCache takenSeats;
+    private final SeatGauges seatGauges;
+    private final ReservationMetrics metrics;
 
-    public ShowService(ShowRepository shows, TransactionTemplate tx, TakenSeatCache takenSeats) {
+    public ShowService(ShowRepository shows, TransactionTemplate tx, TakenSeatCache takenSeats,
+                       SeatGauges seatGauges, ReservationMetrics metrics) {
         this.shows = shows;
         this.tx = tx;
         this.takenSeats = takenSeats;
+        this.seatGauges = seatGauges;
+        this.metrics = metrics;
     }
 
     public ShowResponse create(CreateShowRequest req) {
@@ -69,6 +76,7 @@ public class ShowService {
             shows.insertShow(id, name, price, limit, seats.size());
             shows.insertSeats(id, seats.toArray(new String[0]));
         });
+        seatGauges.register(id);
         log.atInfo().addKeyValue("show_id", id).addKeyValue("total_seats", seats.size()).log("show created");
         return get(id);
     }
@@ -101,6 +109,10 @@ public class ShowService {
             return new CancelShowResponse(id, reservations, seats);
         });
         takenSeats.clearShow(id);
+        seatGauges.unregister(id);
+        if (result.getReservationsCancelled() > 0 || result.getSeatsReleased() > 0) {
+            metrics.cancelled("admin", result.getReservationsCancelled(), result.getSeatsReleased());
+        }
         log.atInfo().addKeyValue("show_id", id)
                 .addKeyValue("reservations_cancelled", result.getReservationsCancelled())
                 .addKeyValue("seats_released", result.getSeatsReleased())

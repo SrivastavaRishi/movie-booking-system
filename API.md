@@ -448,3 +448,44 @@ If the process is hung or dead, there is no response at all (timeout), and the p
 ```
 
 Health endpoints are not subject to the reserve concurrency limit, so they keep answering during a burst.
+
+---
+
+## 10. Metrics — `GET /metrics`
+
+Prometheus text format. **Public — no token** (so it can be scraped; in a real production setup it would be internal only).
+
+### Business metrics
+
+| Metric | Type | Labels | Meaning |
+|--------|------|--------|---------|
+| `reservations_confirmed_total` | counter | — | Reservations newly confirmed (`201`) |
+| `reservation_seats_confirmed_total` | counter | — | Seats confirmed by those reservations |
+| `reservations_declined_total` | counter | `reason` | Reserve requests that did not create a reservation. `reason` is the API error code (`seat_taken`, `per_user_limit`, `idempotency_key_mismatch`, `show_cancelled`, `unknown_seat`, `invalid_request`, `show_not_found`, `rate_limited`, ...) or `idempotent_replay` for a `200` replay |
+| `reservations_cancelled_total` | counter | `by` = `user` / `admin` | Reservations cancelled by their owner, or by an admin cancelling the show |
+| `reservation_seats_released_total` | counter | — | Seats returned to `available` by any cancel |
+| `seats` | gauge | `show_id`, `state` = `available` / `held` / `confirmed` | Seats per active show, **read from the database at scrape time** |
+
+### Built-in metrics (Spring Boot / Micrometer)
+
+- `http_server_requests_seconds_count{uri, method, status}` — requests by endpoint and status code (e.g. proves zero `5xx`).
+- `hikaricp_connections_active` / `hikaricp_connections_pending` — DB pool usage; pending > 0 means requests are waiting for a connection.
+- JVM memory, GC, threads.
+
+### How the metrics reconcile with the API
+
+- The `seats` gauge comes from the same table as `GET /shows/{id}`, so the two always agree (cached for at most 100 ms within one scrape).
+- Counters are incremented once per request, after the outcome is final (a confirmation only after commit), so the change in a counter over a burst equals the outcomes clients observed. `./burst.sh` checks this.
+- For shows created since the app started: `reservation_seats_confirmed_total − reservation_seats_released_total` = the sum of `seats{state="confirmed"}`.
+- Counters live in memory and reset to 0 when the app restarts (normal for Prometheus, which handles resets); the gauge never drifts.
+
+### Example
+
+```
+reservations_confirmed_total{application="seat-reservation"} 14.0
+reservations_declined_total{application="seat-reservation",reason="seat_taken"} 12.0
+reservations_declined_total{application="seat-reservation",reason="per_user_limit"} 8.0
+seats{application="seat-reservation",show_id="b964c905-…",state="available"} 15.0
+seats{application="seat-reservation",show_id="b964c905-…",state="confirmed"} 15.0
+seats{application="seat-reservation",show_id="b964c905-…",state="held"} 0.0
+```

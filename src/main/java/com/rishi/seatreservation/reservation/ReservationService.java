@@ -2,6 +2,7 @@ package com.rishi.seatreservation.reservation;
 
 import com.rishi.seatreservation.common.ApiException;
 import com.rishi.seatreservation.common.SqlErrors;
+import com.rishi.seatreservation.metrics.ReservationMetrics;
 import com.rishi.seatreservation.show.ShowRepository;
 import com.rishi.seatreservation.show.ShowService;
 import org.slf4j.Logger;
@@ -36,23 +37,52 @@ public class ReservationService {
     private final TransactionTemplate tx;
     private final ReserveLimiter limiter;
     private final TakenSeatCache takenSeats;
+    private final ReservationMetrics metrics;
 
     public ReservationService(ReservationRepository reservations, ShowRepository shows, TransactionTemplate tx,
-                              ReserveLimiter limiter, TakenSeatCache takenSeats) {
+                              ReserveLimiter limiter, TakenSeatCache takenSeats, ReservationMetrics metrics) {
         this.reservations = reservations;
         this.shows = shows;
         this.tx = tx;
         this.limiter = limiter;
         this.takenSeats = takenSeats;
+        this.metrics = metrics;
     }
 
-    public ReserveResult reserve(final UUID showId, final UUID userId, ReserveRequest body, String headerKey) {
+    /** Every outcome (success or decline) is logged and counted exactly once, here. */
+    public ReserveResult reserve(UUID showId, UUID userId, ReserveRequest body, String headerKey) {
+        List<String> requested = body == null || body.getSeats() == null
+                ? Collections.<String>emptyList() : body.getSeats();
+        try {
+            ReserveResult result = doReserve(showId, userId, body, headerKey);
+            ReservationResponse r = result.getReservation();
+            if (result.isReplayed()) {
+                metrics.declined("idempotent_replay");
+                logOutcome("idempotent_replay", showId, r.getSeats(), r.getReservationId());
+            } else {
+                metrics.confirmed(r.getSeats().size());
+                logOutcome("confirmed", showId, r.getSeats(), r.getReservationId());
+            }
+            return result;
+        } catch (ApiException e) {
+            metrics.declined(e.getCode());
+            logOutcome(e.getCode(), showId, requested, null);
+            throw e;
+        } catch (DataAccessException e) {
+            // Mapped to 429 (retryable) or 503 by GlobalExceptionHandler; never a 500.
+            String reason = SqlErrors.isRetryable(e) ? "rate_limited" : "db_unavailable";
+            metrics.declined(reason);
+            logOutcome(reason, showId, requested, null);
+            throw e;
+        }
+    }
+
+    private ReserveResult doReserve(final UUID showId, final UUID userId, ReserveRequest body, String headerKey) {
         final String key = resolveKey(body, headerKey);
         final List<String> seats = validateSeats(body);
         final String hash = requestHash(showId, seats);
 
         if (!limiter.tryAcquire()) {
-            logOutcome("rate_limited", showId, seats, null);
             throw ApiException.rateLimited("Too many requests in flight, please retry");
         }
         try {
@@ -68,15 +98,9 @@ public class ReservationService {
             if (!result.isReplayed()) {
                 takenSeats.markTaken(showId, seats);
             }
-            logOutcome(result.isReplayed() ? "idempotent_replay" : "confirmed", showId, seats,
-                    result.getReservation().getReservationId());
             return result;
         } catch (SeatTakenException e) {
             takenSeats.markTaken(showId, e.getTakenSeats());
-            logOutcome("seat_taken", showId, seats, null);
-            throw e;
-        } catch (ApiException e) {
-            logOutcome(e.getCode(), showId, seats, null);
             throw e;
         } finally {
             limiter.release();
@@ -183,6 +207,7 @@ public class ReservationService {
             });
             if (releasedNow[0]) {
                 takenSeats.release(response.getShowId(), response.getSeats());
+                metrics.cancelled("user", 1, response.getSeats().size());
             }
             log.atInfo().addKeyValue("reservation_id", reservationId)
                     .addKeyValue("outcome", releasedNow[0] ? "cancelled" : "already_cancelled")

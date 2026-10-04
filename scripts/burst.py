@@ -85,6 +85,38 @@ def run_parallel(n_tasks, concurrency, fn):
         return list(pool.map(fn, range(n_tasks)))
 
 
+def scrape_metrics(client):
+    """Parses GET /metrics into {series: value}; empty if the endpoint is unavailable."""
+    conn_cls = http.client.HTTPSConnection if client.https else http.client.HTTPConnection
+    try:
+        conn = conn_cls(client.host, client.port, timeout=client.timeout)
+        conn.request("GET", "/metrics")
+        resp = conn.getresponse()
+        text = resp.read().decode()
+        if resp.status != 200:
+            return {}
+    except Exception:
+        return {}
+    values = {}
+    for line in text.splitlines():
+        if line and not line.startswith("#"):
+            series, _, value = line.rpartition(" ")
+            try:
+                values[series] = float(value)
+            except ValueError:
+                pass
+    return values
+
+
+def metric_sum(values, name, label=None):
+    """Sum of all series of a metric, optionally only those containing a label fragment."""
+    total = 0.0
+    for series, v in values.items():
+        if (series == name or series.startswith(name + "{")) and (label is None or label in series):
+            total += v
+    return total
+
+
 def outcome(status, body):
     if status == 201:
         return "201 confirmed"
@@ -149,6 +181,7 @@ def main():
     limit_buyer_token = tokens.pop()  # reserved for the per-user-limit phase
     print("registered %d buyers in %.1fs" % (len(tokens), time.time() - t0))
 
+    metrics_before = scrape_metrics(client)
     reserve_path = "/shows/%s/reserve" % show_id
     confirmed_seats = defaultdict(list)  # seat -> reservation ids that got 201
     lock = threading.Lock()
@@ -229,6 +262,30 @@ def main():
     print("hot-seat winners: %s" % hot_winners)
     print("5xx: %d   network errors/timeouts: %d   total time: %.1fs"
           % (five_xx, net_err, time.time() - t_start))
+    metrics_after = scrape_metrics(client)
+    if metrics_before and metrics_after:
+        observed = Counter(all_results)
+        confirmed_201 = observed.get("201 confirmed", 0)
+        d_confirmed = metric_sum(metrics_after, "reservations_confirmed_total") - \
+            metric_sum(metrics_before, "reservations_confirmed_total")
+        reasons = {}
+        for k, v in observed.items():
+            code = k.split(" ", 1)[1] if " " in k else k
+            if not k.startswith("201") and not k.startswith("network"):
+                reasons[code] = reasons.get(code, 0) + v
+        declines_match = all(
+            int(metric_sum(metrics_after, "reservations_declined_total", 'reason="%s"' % r)
+                - metric_sum(metrics_before, "reservations_declined_total", 'reason="%s"' % r)) == n
+            for r, n in reasons.items())
+        gauge_confirmed = metric_sum(metrics_after, "seats", 'show_id="%s",state="confirmed"' % show_id)
+        print("metrics: confirmed +%d (observed 201s: %d), seats gauge confirmed=%d (API: %d)"
+              % (d_confirmed, confirmed_201, gauge_confirmed, counts["confirmed"]))
+        checks.append(("/metrics counters match observed outcomes (assumes no other traffic)",
+                       int(d_confirmed) == confirmed_201 and declines_match))
+        checks.append(("/metrics seats gauge == API confirmed", int(gauge_confirmed) == counts["confirmed"]))
+    else:
+        print("metrics: /metrics not available, skipping metric checks")
+
     print("\nCHECKS")
     for name, ok in checks:
         print("  [%s] %s" % ("PASS" if ok else "FAIL", name))

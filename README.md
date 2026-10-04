@@ -37,6 +37,25 @@ curl http://localhost:8080/health/ready
 | API        | `http://localhost:8080`                      |
 | PostgreSQL | `localhost:5433` (db / user / password: `seatbooking`) |
 
+### Metrics with Prometheus (optional, local)
+
+The app always exposes Prometheus metrics at `http://localhost:8080/metrics`. To also run a Prometheus server that scrapes it every 5 s (a third container, behind an opt-in profile):
+
+```bash
+docker compose --profile monitoring up --build -d
+```
+
+Then open **http://localhost:9090** and try queries such as:
+
+```
+rate(reservations_confirmed_total[1m])
+reservations_declined_total
+seats{state="available"}
+sum by (status) (http_server_requests_seconds_count)
+```
+
+Metric names and reconciliation rules are in [API.md](API.md#10-metrics--get-metrics).
+
 Useful commands:
 
 ```bash
@@ -113,7 +132,7 @@ What it does:
 3. **Stampede:** buyers grab random seats; some retry with the same idempotency key, some reuse a key with different seats.
 4. **Per-user limit:** one buyer fires 10 parallel reserves on a limit-4 show.
 5. Prints the distribution (`201` / `200` replay / `409` by reason / `5xx`) and checks:
-   no seat confirmed twice · exactly one winner per hot seat · zero 5xx · `available + held + confirmed == total_seats` · API counts match the 201s · per-user limit held.
+   no seat confirmed twice · exactly one winner per hot seat · zero 5xx · `available + held + confirmed == total_seats` · API counts match the 201s · per-user limit held · `/metrics` counters match the observed outcomes and the seats gauge matches the API.
 
 Exit code is `0` only if every check passes. Options: `--users`, `--seats`, `--hot-seats`, `--requests`, `--concurrency`, `--retry-rate`, `--timeout` (see `./burst.sh <url> --help`).
 
@@ -172,5 +191,6 @@ All settings come from environment variables, so the same image runs locally, in
 | POST | `/reservations/{id}/cancel` | Owner only |
 | GET | `/health/live` | Public — liveness |
 | GET | `/health/ready` | Public — readiness (checks the DB, `503` if down) |
+| GET | `/metrics` | Public — Prometheus metrics |
 
 Full details in [API.md](API.md).

@@ -36,6 +36,20 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
+# Only the Prometheus endpoint is exposed from Actuator, at /metrics (public so it can be scraped).
+# Liveness/readiness stay on our own /health/live and /health/ready.
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: prometheus
+      path-mapping:
+        prometheus: metrics
+  metrics:
+    tags:
+      application: seat-reservation
+
 logging:
   structured:
     format:
