@@ -31,7 +31,11 @@ Running on AWS EC2 (Docker Compose: app + PostgreSQL):
 
 The Postman `staging` environment points at this instance.
 
-**Logs:** the app writes one JSON line per request and per reserve outcome (with `request_id` and `user_id`) to stdout. On the instance:
+**Logs:** the app writes one JSON line per request and per reserve outcome (with `request_id` and `user_id`) to stdout.
+
+🎥 **[Screen recording of the live logs under load](https://drive.google.com/file/d/1si--0bwn53OnSSR-aHMfdDDPCkPLIxgT/view?usp=sharing)** (70 s): left, `docker compose logs -f app` on the EC2 instance streaming structured JSON (request id, user id, path, status, latency, reserve outcome); right, `./burst.sh` against the live URL (200 buyers, 5-seat hot storm, 3,345-request stampede) ending with zero 5xx and all 8 checks passing.
+
+To follow the logs yourself on the instance:
 
 ```bash
 ssh -i <key>.pem ubuntu@16.178.54.244 'cd ~/app && docker compose logs -f app'
@@ -231,6 +235,18 @@ All settings come from environment variables, so the same image runs locally, in
 | `TAKEN_CACHE_TTL_MS` | `2000` | In-memory "seat taken" cache TTL (`0` disables) |
 | `TOMCAT_MAX_THREADS` / `TOMCAT_ACCEPT_COUNT` / `TOMCAT_MAX_CONNECTIONS` | `200` / `1000` / `10000` | HTTP server capacity |
 | `LOG_FORMAT` | `logstash` | JSON log lines with `request_id` and `user_id` |
+
+---
+
+## Overload protection and rate limiting
+
+**What exists:** global load shedding, not per-client rate limiting.
+
+- At most `RESERVE_MAX_INFLIGHT` (default 20) reserve/cancel requests work in the database at once; others wait up to `RESERVE_QUEUE_TIMEOUT_MS` (default 2 s) for a slot, then get `429` with `Retry-After`.
+- Database lock, statement and pool timeouts also return `429` instead of hanging or failing with `500`.
+- `per_user_limit` caps the **seats** a user can hold per show; it does not limit request rate.
+
+**Not implemented (next step):** per-user / per-IP request rate limiting (e.g. a token bucket keyed by user id or IP, at an API gateway or in a shared store like Redis) to stop a single aggressive client or bot from taking a large share of the shared capacity. In the live load tests the limiter never triggered (0 × `429`).
 
 ---
 
