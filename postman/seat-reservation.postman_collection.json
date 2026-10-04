@@ -1,14 +1,10 @@
 {
   "info": {
     "name": "Seat Reservation",
-    "description": "Seat Reservation at Scale API. Run the folders top to bottom: tokens, show id and reservation id are saved into collection variables automatically. Set baseUrl for your environment (default http://localhost:8080).",
+    "description": "Seat Reservation at Scale API. Select the Local or Staging environment first: it sets baseUrl, and tokens, show id and reservation id are saved into that environment automatically, so each environment keeps its own. Run the folders top to bottom.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8080"
-    },
     {
       "key": "adminEmail",
       "value": "admin@seatbooking.local"
@@ -18,48 +14,8 @@
       "value": "Admin@12345"
     },
     {
-      "key": "userEmail",
-      "value": ""
-    },
-    {
-      "key": "user2Email",
-      "value": ""
-    },
-    {
-      "key": "userId",
-      "value": ""
-    },
-    {
-      "key": "user2Id",
-      "value": ""
-    },
-    {
       "key": "userPassword",
       "value": "password123"
-    },
-    {
-      "key": "adminToken",
-      "value": ""
-    },
-    {
-      "key": "userToken",
-      "value": ""
-    },
-    {
-      "key": "user2Token",
-      "value": ""
-    },
-    {
-      "key": "showId",
-      "value": ""
-    },
-    {
-      "key": "reservationId",
-      "value": ""
-    },
-    {
-      "key": "idempotencyKey",
-      "value": ""
     }
   ],
   "event": [
@@ -69,13 +25,13 @@
         "type": "text/javascript",
         "exec": [
           "// Fresh emails per run so Register always succeeds",
-          "if (!pm.collectionVariables.get('userEmail')) {",
+          "if (!pm.environment.get('userEmail')) {",
           "  const run = Date.now();",
-          "  pm.collectionVariables.set('userEmail', 'alice-' + run + '@example.com');",
-          "  pm.collectionVariables.set('user2Email', 'bob-' + run + '@example.com');",
+          "  pm.environment.set('userEmail', 'alice-' + run + '@example.com');",
+          "  pm.environment.set('user2Email', 'bob-' + run + '@example.com');",
           "}",
-          "if (!pm.collectionVariables.get('idempotencyKey')) {",
-          "  pm.collectionVariables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
+          "if (!pm.environment.get('idempotencyKey')) {",
+          "  pm.environment.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
           "}"
         ]
       }
@@ -185,7 +141,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.collectionVariables.set(\"userId\", pm.response.json().user_id);"
+                  "pm.environment.set(\"userId\", pm.response.json().user_id);"
                 ]
               }
             }
@@ -228,7 +184,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.collectionVariables.set(\"user2Id\", pm.response.json().user_id);"
+                  "pm.environment.set(\"user2Id\", pm.response.json().user_id);"
                 ]
               }
             }
@@ -313,7 +269,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
-                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().token);"
+                  "pm.environment.set(\"adminToken\", pm.response.json().token);"
                 ]
               }
             }
@@ -356,7 +312,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
-                  "pm.collectionVariables.set(\"userToken\", pm.response.json().token);"
+                  "pm.environment.set(\"userToken\", pm.response.json().token);"
                 ]
               }
             }
@@ -399,7 +355,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
-                  "pm.collectionVariables.set(\"user2Token\", pm.response.json().token);"
+                  "pm.environment.set(\"user2Token\", pm.response.json().token);"
                 ]
               }
             }
@@ -492,7 +448,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.collectionVariables.set(\"showId\", pm.response.json().id);"
+                  "pm.environment.set(\"showId\", pm.response.json().id);"
                 ]
               }
             }
@@ -667,7 +623,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.collectionVariables.set(\"reservationId\", pm.response.json().reservation_id);"
+                  "pm.environment.set(\"reservationId\", pm.response.json().reservation_id);"
                 ]
               }
             }
@@ -909,7 +865,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 201\", function () { pm.response.to.have.status(201); });",
-                  "pm.test(\"booked as the token user\", function () { pm.expect(pm.response.json().user_id).to.eql(pm.collectionVariables.get(\"user2Id\")); });"
+                  "pm.test(\"booked as the token user\", function () { pm.expect(pm.response.json().user_id).to.eql(pm.environment.get(\"user2Id\")); });"
                 ]
               }
             }

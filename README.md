@@ -93,7 +93,7 @@ curl -s -XPOST $B/shows/$SHOW/reserve -H "$J" -H "Authorization: Bearer $USER" \
 curl -s $B/shows/$SHOW
 ```
 
-**Postman:** import [`postman/seat-reservation.postman_collection.json`](postman/seat-reservation.postman_collection.json) and run the collection top to bottom. Tokens and ids are saved into collection variables automatically; change `baseUrl` to target another environment.
+**Postman:** import [`postman/seat-reservation.postman_collection.json`](postman/seat-reservation.postman_collection.json) plus the two environments, [`local`](postman/local.postman_environment.json) (`http://localhost:8080`) and [`staging`](postman/staging.postman_environment.json) (the deployed EC2 instance). Pick an environment in the top-right dropdown and run the collection top to bottom. Tokens and ids are saved into the selected environment automatically, so local and staging never mix tokens.
 
 ---
 
