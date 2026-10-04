@@ -26,7 +26,43 @@ HTTP request
 
 Isolation level: **READ COMMITTED** (PostgreSQL default).
 
-## 3. Reserve — one transaction
+## 3. Locking strategy — pessimistic
+
+Seats are assigned with **pessimistic locking**: a transaction locks the seat row (`SELECT ... FOR UPDATE`) *before* deciding, so only one transaction can decide about a seat at a time. Everyone else waits on the lock, then re-checks.
+
+| | Pessimistic (used here) | Optimistic |
+|---|---|---|
+| Assumption | Conflicts are likely — lock first | Conflicts are rare — detect them at write time |
+| How | `SELECT ... FOR UPDATE`, then decide while holding the lock | Read a `version`, then `UPDATE ... WHERE version = <read value>`; 0 rows changed → someone else won |
+| Losers | **Wait** briefly, re-check once, get a clean `409` | **Fail** and must retry |
+| Best for | **High contention** on the same rows | Low contention |
+
+**Why pessimistic here:** the core scenario is many buyers on the *same* seat at the same instant (maximum contention). With pessimistic locks, each loser waits in line, re-checks once and is declined — a small, fixed amount of work. With optimistic locking, all of them would read the same version, all but one would fail, and retries would pile up again (a *retry storm*) exactly when the system is busiest.
+
+**How it plays out for 500 requests on seat A12:**
+
+```
+t=0   all 500 reach  SELECT ... WHERE label = 'A12' FOR UPDATE
+      Postgres grants the row lock to ONE transaction; the rest wait on that row
+t=1   winner: state = 'available' → UPDATE state = 'confirmed', reservation_id = R → COMMIT → 201
+      lock released
+t=1+  each waiter in turn: re-reads the row → state = 'confirmed' → ROLLBACK → 409 seat_taken
+```
+
+The check ("is it available?") and the claim (`UPDATE`) both happen **while holding the lock**, so nothing can slip in between them — unlike a read-then-write done in application code. `seats.reservation_id` records who owns the seat. The row lock is effectively a **per-seat queue inside Postgres**: requests for *different* seats never wait on each other.
+
+**The mechanisms used, per guarantee:**
+
+| Guarantee | Mechanism | Style |
+|---|---|---|
+| One winner per seat | `SELECT ... FOR UPDATE` on seat rows (sorted), then `UPDATE ... WHERE state = 'available'` | Pessimistic lock; the `WHERE` is a compare-and-set safety net |
+| Per-user limit | Conditional upsert on the `user_quota` row (`... WHERE seats_held + n <= limit`) | Atomic statement that row-locks (pessimistic in practice) |
+| Idempotency | `UNIQUE (user_id, idempotency_key)` + `INSERT ... ON CONFLICT DO NOTHING` | Unique constraint — the index makes a duplicate impossible |
+| No booking on a cancelled show | `FOR SHARE` on the show row (reserve) vs `FOR UPDATE` (cancel-show) | Shared vs exclusive lock |
+
+**Why no message queue:** the client needs the answer (`201` / `409`) in the same HTTP call, and a queue would not remove the need for an atomic decision — the consumer would still have to claim the seat safely. Row locks already give a per-seat queue for free. A queue / virtual waiting room in front of the service is a possible extension for much larger on-sales.
+
+## 4. Reserve — one transaction
 
 ```
 BEGIN
@@ -52,7 +88,7 @@ Notes:
 - If an attempt is declined, the reservation row from step ② is rolled back too, so a retry with the same key is a fresh attempt.
 - PostgreSQL aborts the whole transaction on any error, which is why steps ② and ③ use `ON CONFLICT` instead of catching unique-violation errors.
 
-## 4. No deadlocks — global lock order
+## 5. No deadlocks — global lock order
 
 A deadlock needs two transactions each waiting for a lock the other holds. It cannot happen when **every transaction takes locks in the same order**:
 
@@ -63,7 +99,7 @@ show → reservation → user_quota → seats (sorted by label)
 - Reserve, cancel-reservation and cancel-show all follow this order.
 - Sorting seats matters: without it, request X locks A1 then wants A2 while request Y locks A2 then wants A1 → deadlock. Sorted, both go for A1 first, so one simply waits.
 
-## 5. Cancel reservation — one transaction
+## 6. Cancel reservation — one transaction
 
 ```
 BEGIN
@@ -79,7 +115,7 @@ COMMIT
 - **Two cancels at once:** the row lock in ② makes the second wait; it then sees `cancelled` and releases nothing.
 - **Never releases someone else's seat:** ④ only matches seats still pointing to *this* reservation.
 
-## 6. Cancel show (admin) — one transaction
+## 7. Cancel show (admin) — one transaction
 
 ```
 BEGIN
@@ -92,7 +128,7 @@ COMMIT
 
 Reserves that were waiting on ① then see `cancelled` → `409 show_cancelled`.
 
-## 7. Protection in front of the DB (load, not correctness)
+## 8. Protection in front of the DB (load, not correctness)
 
 These make the service faster under a burst. **Correctness never depends on them.**
 
@@ -103,14 +139,14 @@ These make the service faster under a burst. **Correctness never depends on them
    - A retry of the user's **own** successful request must still be replayed (`200`), so on a cache hit we first look up the user's idempotency key (a cheap indexed read, no locks) and only decline if it is unused.
    - Valid for a **single instance**. Multiple instances would need a shared store.
 
-## 8. Never a 5xx
+## 9. Never a 5xx
 
 - Domain outcomes (seat taken, limit, mismatch, cancelled show) → 4xx via a global exception handler.
 - PostgreSQL `lock_timeout` and `statement_timeout` are set so nothing hangs forever; a timeout → `429` (retryable).
 - Connection-pool timeout (no free DB connection) → `429`.
 - Deadlock (`40P01`) should not happen given the lock order; as a safety net it is retried once, then `429`.
 
-## 9. How it is tested
+## 10. How it is tested
 
 Concurrency tests run against a **real PostgreSQL** (not mocks), using `ExecutorService` + `CountDownLatch` so all threads fire at the same instant:
 
