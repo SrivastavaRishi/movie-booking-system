@@ -124,7 +124,31 @@ The reservation row is locked first (`FOR UPDATE`) and checked to be `confirmed`
 
 ---
 
-## 6. What I'd do next
+## 6. AI usage: directed vs decided
+
+AI tools were used throughout (Claude via Claude Code, as a pair-programming partner in the terminal). Below is what I directed and decided versus what the AI proposed or produced.
+
+**Decided / directed by me:**
+
+- Working style: discuss and agree on the design (APIs, DB, concurrency) before any code; documents first (`API.md`, `DB.md`, `ASSUMPTIONS.md`, `CONCURRENCY.md`).
+- Stack constraints: Java 8-style code (no virtual threads or newer language features), JdbcTemplate over JPA, free hosting only.
+- Database: started with MySQL; switched to PostgreSQL after comparing the two for this specific workload.
+- Domain and API decisions: users table with `USER`/`ADMIN` roles and a pre-seeded admin (via migration, not environment variables); separate register and token endpoints; UUID user ids with a separate unique email; an admin-only show-cancel endpoint; public `GET /shows/{id}`; owner-only reservation cancel; enforcing the per-user limit both per request and per show; single seat category and single venue as explicit assumptions.
+- Scope: no frontend; Prometheus without Grafana; Postman collection with local/staging environments; deployment on EC2.
+- Reviewed every change, ran the service locally and in Docker, and controlled every commit.
+
+**Proposed or produced by the AI (and reviewed/accepted by me):**
+
+- The concurrency mechanism details: the reserve transaction steps, the global lock order, `ON CONFLICT` for idempotency and the `user_quota` conditional upsert, `FOR SHARE` vs `FOR UPDATE` for show cancel.
+- Response conventions: `200` + `Idempotent-Replayed` for replays, the common error body, `404` (not `403`) for other users' reservations.
+- Load-protection pieces: the semaphore limiter and the "already taken" cache (reject-only, TTL).
+- Most of the implementation code, the concurrency test suite, the burst script, the metrics design, the Dockerfile and Compose file, and first drafts of the documents.
+
+**How I checked it:** concurrency tests run against a real PostgreSQL (not mocks), the burst script's reconciliation checks, the Postman collection run end to end, and reading the SQL for every lock taken. Issues caught during review and testing included stale metric snapshots, metrics being disabled in Spring Boot tests, and a cache-refresh behaviour that could have kept a freed seat rejected; all were fixed before commit.
+
+---
+
+## 7. What I'd do next
 
 1. **Capacity testing on the live instance** with the full ~20k burst, and tuning `RESERVE_MAX_INFLIGHT`, the DB pool and Tomcat from the metrics (HikariCP pending, 429 rate, latency).
 2. **Alerting:** encode the paging rules above in Prometheus/Alertmanager.

@@ -10,7 +10,7 @@ A JSON HTTP API that sells assigned seats for a show and stays correct under hea
 | [DB.md](DB.md) | Tables, columns, keys, and why PostgreSQL |
 | [CONCURRENCY.md](CONCURRENCY.md) | How double-sells, limits and retries are prevented |
 | [ASSUMPTIONS.md](ASSUMPTIONS.md) | Scope decisions and interpretations of the brief |
-| [WRITEUP.md](WRITEUP.md) | Design write-up: atomic decision, idempotency, holds, partitions, observability |
+| [WRITEUP.md](WRITEUP.md) | Design write-up: atomic decision, idempotency, holds, partitions, observability, AI usage |
 
 ---
 
