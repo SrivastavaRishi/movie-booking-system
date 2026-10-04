@@ -10,6 +10,34 @@ A JSON HTTP API that sells assigned seats for a show and stays correct under hea
 | [DB.md](DB.md) | Tables, columns, keys, and why PostgreSQL |
 | [CONCURRENCY.md](CONCURRENCY.md) | How double-sells, limits and retries are prevented |
 | [ASSUMPTIONS.md](ASSUMPTIONS.md) | Scope decisions and interpretations of the brief |
+| [WRITEUP.md](WRITEUP.md) | Design write-up: atomic decision, idempotency, holds, partitions, observability, AI usage |
+
+---
+
+## Live deployment
+
+Running on AWS EC2 (Docker Compose: app + PostgreSQL):
+
+| What | URL |
+|------|-----|
+| API base URL | `http://16.178.54.244:8080` |
+| Liveness | http://16.178.54.244:8080/health/live |
+| Readiness (checks the DB) | http://16.178.54.244:8080/health/ready |
+| Prometheus metrics | http://16.178.54.244:8080/metrics |
+
+```bash
+./burst.sh http://16.178.54.244:8080                        # stampede against the live service
+```
+
+The Postman `staging` environment points at this instance.
+
+**Logs:** the app writes one JSON line per request and per reserve outcome (with `request_id` and `user_id`) to stdout. On the instance:
+
+```bash
+ssh -i <key>.pem ubuntu@16.178.54.244 'cd ~/app && docker compose logs -f app'
+```
+
+**Deploying:** `./deploy.sh <HOST_IP>` builds the image locally (linux/arm64), streams it to the instance over SSH, generates secrets in `~/app/.env` on the first deploy (they never leave the server), starts the stack and waits for `/health/ready`. The instance only needs Docker.
 
 ---
 
